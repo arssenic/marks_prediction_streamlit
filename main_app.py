@@ -34,12 +34,22 @@ def sidebar():
         input_value = {}
 
         for label, key in slider_labels:
-            input_value[key] = st.sidebar.slider(
+            if key == "number_courses":
+                input_value[key] = st.sidebar.slider(
                 label,
-                min_value=float(0),
-                max_value=float(data[key].max()),
-                value=float(data[key].mean())
+                min_value=int(0),
+                max_value=int(data[key].max()),
+                value=int(data[key].mean()),
+                step=1
             )
+
+            else:
+                input_value[key] = st.sidebar.slider(
+                    label,
+                    min_value=float(0),
+                    max_value=float(data[key].max()),
+                    value=float(data[key].mean())
+                )
 
     with st.sidebar.container():
         st.markdown("### 🎓 Student Marks Prediction")
