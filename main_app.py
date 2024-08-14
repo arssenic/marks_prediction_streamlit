@@ -3,27 +3,154 @@ import pickle
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
 import plotly.graph_objects as go
 from streamlit_lottie import st_lottie
+from sklearn.linear_model import LinearRegression
+from streamlit import download_button
+from io import StringIO
 import json
+import time
 
+st.set_page_config(
+    page_title="Student Marks Predictor",
+    page_icon=":mortar_board:",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+st.markdown("""
+<style>
+    .main {
+        padding: 2rem;
+    }
+    .stApp {
+        background-color: #f5f5f5;
+    }
+    .stButton>button {
+        background-color: #4CAF50;
+        color: white;
+        font-weight: bold;
+        border-radius: 5px;
+        border: none;
+        padding: 0.5rem 1rem;
+        transition: all 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #45a049;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .stExpander {
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    .css-1d391kg {
+        padding-top: 3rem;
+    }
+    h1 {
+        color: #2C3E50;
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+    }
+    h2 {
+        color: #34495E;
+        font-size: 1.8rem;
+        margin-top: 2rem;
+    }
+    .stSidebar .sidebar-content {
+        background-color: #2C3E50;
+    }
+    .icon-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .icon-header img {
+        width: 36px;
+        height: 36px;
+    }
+    .icon-header h2 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1;
+    }
+            
+    .main .block-container h1, 
+    .main .block-container h2, 
+    .main .block-container h3, 
+    .main .block-container h4 {
+        border-bottom: 2px solid #000000;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+    }
+
+    /* Exclude headings in the sidebar */
+    .sidebar .block-container h1, 
+    .sidebar .block-container h2, 
+    .sidebar .block-container h3, 
+    .sidebar .block-container h4 {
+        border-bottom: none;
+        padding-bottom: 0;
+        margin-bottom: 0;
+    }
+    .stButton > button {
+        margin-left: 5px;
+    }
+    .main .block-container h2, 
+    .main .block-container h3 {
+        margin-bottom: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+@st.cache_data
 def load_lottiefile(filepath: str):
     with open(filepath, "r") as f:
         return json.load(f)
 
+@st.cache_data
 def data_cleaning():
     data = pd.read_csv("data/Student_Marks.csv")
     return data
 
 def sidebar():
+    st.markdown("""
+    <style>
+    .sidebar .sidebar-content {
+        background-color: #f8f9fa;
+    }
+    .sidebar .sidebar-content .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    .sidebar .sidebar-content .stSlider > div > div > div > div {
+        background-color: #4CAF50;
+    }
+    .sidebar .sidebar-content .stSlider > div > div > div > div > div {
+        color: #1e3a8a;
+    }
+    .sidebar .sidebar-content label {
+        font-family: 'Helvetica', 'Arial', sans-serif;
+        font-size: 16px;
+        font-weight: 600;
+        color: #2C3E50;
+    }
+    .sidebar .sidebar-content .stSlider output {
+        font-family: 'Courier New', monospace;
+        font-size: 14px;
+        font-weight: bold;
+        color: #34495E;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
     lottie_animation = load_lottiefile("data/Animation - 1719940416157.json")
 
-    with st.sidebar.container():
-        st_lottie(lottie_animation, height=60, key="lottie_animation")
-
-    with st.sidebar.container():
-        st.markdown("### 📊 Observations")
+    with st.sidebar:
+        st_lottie(lottie_animation, height=80, key="lottie_animation")
+        
+        st.markdown("### 📊 Input Parameters")
         data = data_cleaning()
 
         slider_labels = [
@@ -34,72 +161,91 @@ def sidebar():
         input_value = {}
 
         for label, key in slider_labels:
+            st.markdown(f"<p style='margin-bottom: 0;'>{label}</p>", unsafe_allow_html=True)
             if key == "number_courses":
-                input_value[key] = st.sidebar.slider(
-                label,
-                min_value=int(0),
-                max_value=int(data[key].max()),
-                value=int(data[key].mean()),
-                step=1
-            )
-
+                input_value[key] = st.slider(
+                    label,
+                    min_value=int(0),
+                    max_value=int(data[key].max()),
+                    value=int(data[key].mean()),
+                    step=1,
+                    key=f"slider_{key}",
+                    label_visibility="collapsed"
+                )
             else:
-                input_value[key] = st.sidebar.slider(
+                input_value[key] = st.slider(
                     label,
                     min_value=float(0),
                     max_value=float(data[key].max()),
-                    value=float(data[key].mean())
+                    value=float(data[key].mean()),
+                    key=f"slider_{key}",
+                    label_visibility="collapsed"
                 )
 
-    with st.sidebar.container():
         st.markdown("### 🎓 Student Marks Prediction")
 
         model = pickle.load(open("data/model.pkl", "rb"))
         input_array = np.array(list(input_value.values())).reshape(1, -1)
         prediction = model.predict(input_array)
 
-        st.write("The marks obtained by the student are:", prediction[0])
+        st.markdown(
+            f"""
+            <div style="
+                color: #ffffff; 
+                background: linear-gradient(135deg, #4CAF50 0%, #388E3C 100%);
+                padding: 15px 20px; 
+                border-radius: 15px; 
+                text-align: center; 
+                font-size: 20px; 
+                font-weight: bold; 
+                box-shadow: 0px 8px 16px rgba(0, 0, 0, 0.3);
+                border: 2px solid #2C6B41;
+                margin: 20px auto;
+                font-family: 'Arial', sans-serif;
+                transition: all 0.3s;
+            ">
+                Predicted Marks: <span style="
+                    color: #FFD700;
+                    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.6);
+                    font-size: 28px;
+                ">{prediction[0]:.2f}</span>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
 
     return input_value
-
-st.set_page_config(
-    page_title="Student Marks Predictor",
-    page_icon=":student:",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 def styled_table(data):
     table_css = """
     <style>
     .dataframe-container {
-        width: 100%; /* Set width to 100% of the container */
-        overflow-x: auto; /* Enable horizontal scrolling if content exceeds width */
-        margin: 20px 0;
+        width: 100%;
+        overflow-x: auto;
+        margin: 0; 
+        background-color: white;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        padding: 0.5rem;
     }
     .dataframe {
-        width: 100%; /* Set table width to 100% */
+        width: 100%;
         border-collapse: collapse;
-        font-size: 18px;
+        font-size: 16px;
         text-align: left;
         color: #333;
-        border-radius: 0.5rem; /* Add curved corners to the table */
-        overflow: hidden; /* Ensure curved corners are visible */
     }
     .dataframe th, .dataframe td {
-        padding: 1rem; /* Set padding to 1rem */
-        border: 1px solid #ddd;
+        padding: 0.75rem;
+        border-bottom: 1px solid #ddd;
     }
     .dataframe th {
-        background-color: #CCCCCE; /* Set background color to #CCCCCE */
-        font-size: 20px;
-        border-radius: 0.5rem; /* Add curved corners to the table headers */
-    }
-    .dataframe tr:nth-child(even) {
-        background-color: #f9f9f9;
+        background-color: #f2f2f2;
+        font-weight: bold;
+        text-transform: uppercase;
     }
     .dataframe tr:hover {
-        background-color: #f1f1f1;
+        background-color: #f5f5f5;
     }
     </style>
     """
@@ -115,247 +261,209 @@ def styled_table(data):
     st.markdown(table_css, unsafe_allow_html=True)
     st.markdown(html_table, unsafe_allow_html=True)
 
-
-input_data = sidebar()
-data = data_cleaning()
-
-header_container = st.container()
-with header_container:
-    col1, col2 = st.columns([2, 16])
-    col1.image('data/predictive-chart.png', width=70)
-    col2.markdown("<h1 style='text-decoration: underline;'>Student Marks Predictor</h1>", unsafe_allow_html=True)
-
-st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>An interactive environment to easily predict the performance of a student.</div>",
-        unsafe_allow_html=True)
-
-st.markdown("\n")
-
-main_container = st.container()
-with main_container:
-    with st.expander("Show Data"):
-        styled_table(data)
-        col1, col2 = st.columns([1, 10])
-        col1.image('data/research.png', width=70)
-        col2.markdown("<h1 style='text-decoration: underline;'>Additional Insights</h1>", unsafe_allow_html=True)
-        if st.checkbox("Show Summary Statistics"):
-            col1, col2 = st.columns([1, 1.15])
-            with col1:
-                st.markdown("<div style='padding: 0.5rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>Data Summary:</div>",
-                    unsafe_allow_html=True)
-                st.markdown("\n")
-                st.write(data.describe())
-            with col2:
-                st.markdown("<div style='padding: 0.5rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>Prediction vs Actual:</div>",
-                    unsafe_allow_html=True)
-                st.markdown("\n")
-                X_test = pd.read_csv('data/X_test.csv')
-                y_test = pd.read_csv('data/y_test.csv')
-                model = pickle.load(open("data/model.pkl", "rb"))
-                y_pred = model.predict(X_test)
-
-                fig, ax = plt.subplots()
-                ax.scatter(y_test, y_pred, alpha=0.5, color='red')
-                ax.plot([y_test.min(), y_test.max()], [y_test.min(), y_test.max()], 'k--', lw=2)
-                ax.set_xlabel('Actual Marks')
-                ax.set_ylabel('Predicted Marks')
-                ax.set_title('Predicted vs Actual Marks')
-                ax.grid(True)
-                ax.legend(['Actual Marks', 'Predicted Marks'])
-                ax.set_facecolor('#f9f9f9')
-                for spine in ax.spines.values():
-                    spine.set_edgecolor('#f9f9f9')
-                    spine.set_linewidth(1.5)
-                    spine.set_path_effects([pe.withStroke(linewidth=2, foreground='black')])
-                st.pyplot(fig)
-
-    if 'show_visualization' not in st.session_state:
-        st.session_state.show_visualization = False
-
-    if st.button("📉 Data Visualization"):
-        st.session_state.show_visualization = True
-
-    if st.session_state.show_visualization:
-        col1, col2, col3, col4 = st.columns([0.22,1.8,0.22,1.8])
-
-        with col1:
-            col1.image('data/scatter-graph.png', width=35)
-        with col2:
-            st.markdown("<div style='padding: 0.5rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>Scatter Plot:</div>",
-                    unsafe_allow_html=True)
-            st.markdown("\n")
-            fig, ax = plt.subplots()
-            ax.scatter(data['time_study'], data['Marks'], alpha=0.5, color='blue')
-            ax.set_xlabel('Study Hours')
-            ax.set_ylabel('Marks')
-            ax.set_title('Marks vs. Study Hours')
-            ax.grid(True)
-            ax.set_facecolor('#f9f9f9')
-            for spine in ax.spines.values():
-                spine.set_edgecolor('#f9f9f9')
-                spine.set_linewidth(1.5)
-                spine.set_path_effects([pe.withStroke(linewidth=2, foreground='black')])
-            st.pyplot(fig)
-
-        with col3:
-            col3.image('data/growth.png', width=35)
-        with col4:
-            st.markdown("<div style='padding: 0.5rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>Line Chart:</div>",
-                    unsafe_allow_html=True)
-            st.markdown("\n")
-            st.line_chart(data)
-
-        col1, col2 = st.columns([0.18, 3])
-        with col1:
-            st.image('data/3d-modeling.png', width=40)
-        with col2:
-            st.markdown(
-                "<div style='padding: 0.5rem; padding-right: 2rem; background-color: #CCCCCE; border-radius: 0.5rem;'>3D Plot with Best Fit Plane:</div>",
-                unsafe_allow_html=True
-            )
-
-        fig = go.Figure()
-
-        fig.add_trace(go.Scatter3d(
-            x=data['number_courses'],
-            y=data['time_study'],
-            z=data['Marks'],
-            mode='markers',
-            marker=dict(size=5, color='blue', opacity=0.8)
-        ))
-
-        model = pickle.load(open("data/model.pkl", "rb"))
-        xx, yy = np.meshgrid(np.linspace(data['number_courses'].min(), data['number_courses'].max(), 10),
-                             np.linspace(data['time_study'].min(), data['time_study'].max(), 10))
-        zz = model.predict(np.c_[xx.ravel(), yy.ravel()]).reshape(xx.shape)
-
-        fig.add_trace(go.Surface(x=xx, y=yy, z=zz, colorscale='Viridis', opacity=0.5))
-
-        fig.update_layout(
-            scene=dict(
-                xaxis_title='Number of Courses',
-                yaxis_title='Study Hours',
-                zaxis_title='Marks'
-            ),
-        )
-
-        st.plotly_chart(fig)
-
-st.markdown("---")
-footer_container = st.container()
-with footer_container:
-    col1, col2 = st.columns([1.2, 10])
-
-    col1.image('data/info.png', width=55)
-    col2.markdown("<h1 style='text-decoration: underline; font-size: 2rem; margin: 0;'>About</h1>",
-                  unsafe_allow_html=True)
-
-st.markdown(
-    "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>This app uses an ML model to predict "
-    "the marks of a student by taking number of courses and study hours as input.The prediction model is built using data of students and leverages machine learning techniques."
-    "</div>",
-    unsafe_allow_html=True)
-
-st.markdown("\n")
-main_container=st.container()
-with main_container:
-    if st.checkbox("Click here to read more"):
-        st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>The machine learning model was trained"
-        " on the Linear Regression algorithm and gave the following results:</h1>",
-        unsafe_allow_html=True)
-
-        st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>1. The r2 score of the model was 0.946."
-        " For more results on r2 score, you can stick to the scikit-learn website <a href='https://scikit-learn.org/stable/' target='_blank'>scikit-learn</a>.</h1>",
-        unsafe_allow_html=True)
-
-        st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>2. The mean absolute error(MAE) was recorded about 3.08.</h1>",
-        unsafe_allow_html=True)
-
-st.markdown("\n")
-st.markdown("\n")
-footer2_container = st.container()
-with footer2_container:
-    col1, col2 = st.columns([1.2, 10])
-
-    col1.image('data/manual.png', width=55)
-    col2.markdown("<h1 style='text-decoration: underline; font-size: 2rem; margin: 0;'>User Guide</h1>",
-                  unsafe_allow_html=True)
+def main():
+    input_data = sidebar()
+    data = data_cleaning()
 
     st.markdown("""
-        **Step-by-Step Guide to Use the App:**""")
-    st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>1. Navigate to the Sidebar: On the left side of the screen, you will see a sidebar containing input sliders and other options.</div>",
-        unsafe_allow_html=True)
-    st.markdown("\n")
-    col1, col2, col3 = st.columns([3, 1, 3])
-    with col2:
-        st.image('data/down-arrow.png', width=50)
-    st.markdown("\n")
-    st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>2. Input Values: Use the sliders to set the number of courses and study hours. These inputs will be used to predict the student's marks.</div>",
-        unsafe_allow_html=True)
-    st.markdown("\n")
-    col1, col2, col3 = st.columns([3, 1, 3])
-    with col2:
-        st.image('data/down-arrow.png', width=50)
-    st.markdown("\n")
-    st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>3. View Prediction: The predicted marks will be displayed below the sliders as soon as you adjust the inputs.</div>",
-        unsafe_allow_html=True)
-    st.markdown("\n")
-    col1, col2, col3 = st.columns([3, 1, 3])
-    with col2:
-        st.image('data/down-arrow.png', width=50)
-    st.markdown("\n")
-    st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>4. Show Data: If you wish to see the underlying data, click on the Show Data"
-        " checkbox. You can also view summary statistics and a prediction vs. actual marks plot.</div>",
-        unsafe_allow_html=True)
-    st.markdown("\n")
-    col1, col2, col3 = st.columns([3, 1, 3])
-    with col2:
-        st.image('data/down-arrow.png', width=50)
-    st.markdown("\n")
-    st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>5. Data Visualization: Click on the 📉 Data Visualization button to generate various visualizations such as scatter plots, line charts, and 3D plots.</div>",
-        unsafe_allow_html=True)
-    st.markdown("\n")
-    col1, col2, col3 = st.columns([3, 1, 3])
-    with col2:
-        st.image('data/down-arrow.png', width=50)
-    st.markdown("\n")
-    st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>6. Additional Insights: If the data is displayed, you can view additional insights by checking the Show Summary Statistics checkbox.</div>",
-        unsafe_allow_html=True)
-    st.markdown("\n")
-    col1, col2, col3 = st.columns([3, 1, 3])
-    with col2:
-        st.image('data/down-arrow.png', width=50)
-    st.markdown("\n")
-    st.markdown(
-        "<div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>7. About & Contact: At the bottom of the page, you will find sections providing information about the app and contact details for any queries or feedback.</div>",
-        unsafe_allow_html=True)
-
-st.markdown("\n")
-st.markdown("\n")
-st.markdown("\n")
-footer1_container = st.container()
-with footer1_container:
-    col1, col2 = st.columns([1.2, 10])
-
-    col1.image('data/mail.png', width=55)
-    col2.markdown("<h1 style='text-decoration: underline; font-size: 2rem; margin: 0;'>Contact</h1>",
-                  unsafe_allow_html=True)
-
-st.markdown(
-    """
-    <div style='padding: 1rem; background-color: #CCCCCE; border-radius: 0.5rem ;'>
-        For more information, visit the <a href='https://github.com/arssenic' target='_blank'>GitHub account</a>.
-        For sharing your reviews and opinions, please refer to this link <a href='https://testimonial.to/reviews37' target='_blank'>Reviews</a>.
+    <div style="
+        background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+        padding: 1rem;
+        border-radius: 15px;
+        text-align: center;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+        margin-bottom: 2rem;
+    ">
+        <div style="
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1rem;
+        ">
+            <img src="https://img.icons8.com/fluency/96/000000/student-center.png" alt="Student icon" style="width: 60px; height: 60px; margin-right: 15px;">
+            <h1 style="
+                color: white;
+                font-size: 3rem;
+                font-weight: bold;
+                margin: 0;
+                text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            ">
+                Student Marks Predictor
+            </h1>
+        </div>
+        <p style="
+            color: #e3f2fd;
+            font-size: 1.3rem;
+            font-style: italic;
+            max-width: 700px;
+            margin: 1rem auto;
+        ">
+            An interactive tool to predict student performance based on study habits
+        </p>
     </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2 = st.columns([1, 1])
+
+    with col1:
+        st.header("📈 Prediction Summary")
+        st.markdown("\n")
+        st.info(f"Number of Courses: {input_data['number_courses']}")
+        st.info(f"Study Hours: {input_data['time_study']:.2f}")
+        
+        model = pickle.load(open("data/model.pkl", "rb"))
+        input_array = np.array(list(input_data.values())).reshape(1, -1)
+        prediction = model.predict(input_array)[0]
+        
+        st.success(f"Predicted Marks: {prediction:.2f}")
+
+    with col2:
+        st.header("📊 Dataset Preview")
+        styled_table(data.head(5))
+    
+    if st.checkbox("Show Full Dataset"):
+            styled_table(data)
+
+    st.markdown("\n")
+
+    csv = data.to_csv(index=False)
+    csv_bytes = csv.encode()
+
+
+    st.markdown(
+    """
+    <div style="display: flex; align-items: flex-start; margin-bottom: 1rem;">
+        <img src="https://img.icons8.com/color/48/000000/download--v1.png" style="width: 30px; height: 30px; margin-right: 10px; margin-top: 5px;"/>
+        <div style="display: flex; flex-direction: column;">
+            <h3 style="margin: 0 0 10px 0;">Download Dataset</h3>
+            <div style="margin-left: -5px;">
+    """, 
+    unsafe_allow_html=True
+)
+
+    st.download_button(
+    label="Click to Download",
+    data=csv_bytes,
+    file_name="student_marks_data.csv",
+    mime="text/csv",
+)
+    st.markdown("</div></div></div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+
+    st.markdown(
+    """
+    <div style="display: flex; align-items: flex-start; margin-bottom: 1rem;">
+        <img src='https://img.icons8.com/color/48/000000/combo-chart--v1.png' alt='Chart icon' style="width: 30px; height: 30px; margin-right: 10px; margin-top: 5px;"/>
+        <div style="display: flex; flex-direction: column;">
+            <h2 style="margin: 0 0 10px 0;">Data Visualization</h2>
+            <div style="margin-left: -5px;">
     """,
     unsafe_allow_html=True
 )
+    
+    if st.button("Generate Visualizations"):
+        with st.spinner('Creating visualizations...'):
+            time.sleep(1.5)
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 8))
+            
+            ax1.scatter(data['time_study'], data['Marks'], alpha=0.6, color='#1e88e5', s=50)
+            ax1.set_xlabel('Study Hours', fontsize=14)
+            ax1.set_ylabel('Marks', fontsize=14)
+            ax1.set_title('Marks vs. Study Hours', fontsize=16)
+            ax1.grid(True, linestyle='--', alpha=0.7)
+            ax1.tick_params(axis='both', which='major', labelsize=12)
+            
+
+            ax2.hist(data['Marks'], bins=20, color='#43a047', alpha=0.7, edgecolor='black')
+            ax2.set_xlabel('Marks', fontsize=14)
+            ax2.set_ylabel('Frequency', fontsize=14)
+            ax2.set_title('Distribution of Marks', fontsize=16)
+            ax2.grid(True, linestyle='--', alpha=0.7)
+            ax2.tick_params(axis='both', which='major', labelsize=12)
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            fig = go.Figure()
+
+            fig.add_trace(go.Scatter3d(
+                x=data['number_courses'],
+                y=data['time_study'],
+                z=data['Marks'],
+                mode='markers',
+                marker=dict(
+                    size=5,
+                    color=data['Marks'],
+                    colorscale='Viridis',
+                    opacity=0.8
+                ),
+                name='Data Points'
+            ))
+
+            X = data[['number_courses', 'time_study']]
+            y = data['Marks']
+            model = LinearRegression().fit(X, y)
+
+            x_range = np.linspace(data['number_courses'].min(), data['number_courses'].max(), 20)
+            y_range = np.linspace(data['time_study'].min(), data['time_study'].max(), 20)
+            xx, yy = np.meshgrid(x_range, y_range)
+
+            z = model.intercept_ + model.coef_[0] * xx + model.coef_[1] * yy
+
+            fig.add_trace(go.Surface(
+                x=xx, y=yy, z=z,
+                colorscale='Greys',
+                opacity=0.5,
+                name='Best Fit Plane'
+            ))
+
+            fig.update_layout(
+                scene=dict(
+                    xaxis_title='Number of Courses',
+                    yaxis_title='Study Hours',
+                    zaxis_title='Marks'
+                ),
+                height=800,
+                margin=dict(r=20, b=10, l=10, t=10),
+                legend=dict(
+                    yanchor="top",
+                    y=0.99,
+                    xanchor="left",
+                    x=0.01
+                )
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+            pass
+
+    st.markdown("</div></div></div>", unsafe_allow_html=True)
+
+    st.markdown("---")
+    st.header("📘 About the Model")
+    st.write("""
+    This prediction model uses Linear Regression to estimate student marks based on the number of courses taken and study hours invested. 
+    The model achieved an r2score of 0.946, indicating a strong correlation between the input features and the predicted marks.
+    
+    Key metrics:
+    - r2 Score: 0.946
+    - Mean Absolute Error (MAE): 3.08
+    
+    For more information on these metrics, visit the [scikit-learn documentation](https://scikit-learn.org/stable/).
+    """)
+
+    st.markdown("---")
+
+    st.header("📞 Contact & Feedback")
+    st.write("""
+    We value your input! If you have any questions, suggestions, or feedback, please don't hesitate to reach out.
+    
+    - 🌐 [Visit our GitHub](https://github.com/arssenic)
+    - ✍️ [Leave a review](https://testimonial.to/reviews37)
+    """)
+
+    st.markdown("---")
+    st.caption("App Version: 1.1.0 | Model Version: 2023.08.01")
+
+if __name__ == "__main__":
+    main()
